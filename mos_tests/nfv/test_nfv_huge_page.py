@@ -97,7 +97,7 @@ class TestHugePages(TestBaseNFV):
         """
         free_pages = {1: 768, 3: 256}
         hosts = aggregate.hosts
-        vms = {}
+        vms = []
 
         for i in range(2):
             vm_name = 'vm{}'.format(i)
@@ -106,7 +106,7 @@ class TestHugePages(TestBaseNFV):
                 nics=[{'net-id': networks[0]}],
                 availability_zone='nova:{}'.format(hosts[0]),
                 security_groups=[security_group.id])
-            vms.update({vm_name: vm})
+            vms.append(vm)
         vm2 = os_conn.create_server(
             name='vm2', flavor=nfv_flavor[0].id,
             nics=[{'net-id': networks[1]}],
@@ -117,9 +117,9 @@ class TestHugePages(TestBaseNFV):
             nics=[{'net-id': networks[1]}],
             availability_zone='nova:{}'.format(hosts[1]),
             security_groups=[security_group.id])
-        vms.update({'vm2': vm2, 'vm3': vm3})
+        vms.extend([vm2, vm3])
 
-        for vm in vms.values():
+        for vm in vms:
             self.check_instance_page_size(os_conn, vm, size=2048)
 
         self.check_pages(os_conn, hosts[0], total_pages=1024,
@@ -127,5 +127,5 @@ class TestHugePages(TestBaseNFV):
         self.check_pages(os_conn, hosts[1], total_pages=1024,
                          free_pages=free_pages[1])
 
-        os_conn.assign_floating_ip(vms['vm0'])
+        os_conn.assign_floating_ip(vms[0])
         network_checks.check_vm_connectivity(env, os_conn)
