@@ -76,3 +76,56 @@ class TestHugePages(TestBaseNFV):
                              free_pages=free_pages[vm_hosts.count(host)])
         self.check_instance_page_size(os_conn, vm_0_new, size=2048)
         network_checks.check_vm_connectivity(env, os_conn)
+
+    @pytest.mark.check_env_('has_3_or_more_computes')
+    @pytest.mark.undestructive
+    @pytest.mark.testrail_id('838297')
+    def test_allocation_huge_pages_2m_for_vms(self, env, os_conn, networks,
+                                              nfv_flavor, security_group,
+                                              aggregate):
+        """This test checks allocation 2M HugePages for instances
+            Steps:
+            1. Create net1 with subnet, net2 with subnet and  router1 with
+            interfaces to both nets
+            2. Launch vm1 and vm2 using net1 on the first compute
+            3. Launch vm3 using net1 on the second compute
+            4. Launch vm4 using net2 on the second compute
+            5. Check instances configuration (about huge pages)
+            6. Check quantity of HP on computes
+            7. Associate floating to vm1
+            8. Check pings from all vms to all vms by all ips
+        """
+        free_pages = {1: 768, 3: 256}
+        hosts = aggregate.hosts
+        vms = {}
+
+        for i in range(2):
+            vm_name = 'vm{}'.format(i)
+            vm = os_conn.create_server(
+                name=vm_name, flavor=nfv_flavor[0].id,
+                nics=[{'net-id': networks[0]}],
+                availability_zone='nova:{}'.format(hosts[0]),
+                security_groups=[security_group.id])
+            vms.update({vm_name: vm})
+        vm2 = os_conn.create_server(
+            name='vm2', flavor=nfv_flavor[0].id,
+            nics=[{'net-id': networks[1]}],
+            availability_zone='nova:{}'.format(hosts[0]),
+            security_groups=[security_group.id])
+        vm3 = os_conn.create_server(
+            name='vm3', flavor=nfv_flavor[0].id,
+            nics=[{'net-id': networks[1]}],
+            availability_zone='nova:{}'.format(hosts[1]),
+            security_groups=[security_group.id])
+        vms.update({'vm2': vm2, 'vm3': vm3})
+
+        for vm in vms.values():
+            self.check_instance_page_size(os_conn, vm, size=2048)
+
+        self.check_pages(os_conn, hosts[0], total_pages=1024,
+                         free_pages=free_pages[3])
+        self.check_pages(os_conn, hosts[1], total_pages=1024,
+                         free_pages=free_pages[1])
+
+        os_conn.assign_floating_ip(vms['vm0'])
+        network_checks.check_vm_connectivity(env, os_conn)
